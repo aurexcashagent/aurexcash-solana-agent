@@ -58,7 +58,7 @@ app.post("/mcp", async (req, res) => {
 
     const output = await generateText(prompt);
 
-    // подписываем (демо-подпись): prompt + output + nonce
+    // prompt + output + nonce
     const nonce = crypto.randomBytes(16).toString("hex");
     const message = JSON.stringify({ prompt, output, nonce });
     const messageBytes = new TextEncoder().encode(message);
@@ -77,6 +77,8 @@ app.post("/mcp", async (req, res) => {
     res.status(500).json({ ok: false, error: e?.message || String(e) });
   }
 });
+
+const PORT = process.env.PORT || 8787;
 
 app.listen(PORT, () => {
   console.log(`AurexCash server: http://localhost:${PORT}`);
