@@ -1,34 +1,30 @@
 # AurexCash Solana AI Agent
 
-Web3 AI agent deployed on **Solana Agent Registry** with an MCP endpoint and signed responses.
+Open-source **AI agent running on Solana Agent Registry** with an MCP endpoint and cryptographically signed responses.
 
 ---
 
-## Overview
+# Overview
 
-AurexCash is an AI-powered Web3 agent that:
+AurexCash is a Web3 AI agent that:
 
 • runs an MCP endpoint
-• signs every response with its Solana wallet
+• signs every response using a Solana wallet
 • is registered on-chain in the Solana Agent Registry
 
-This means anyone can verify:
-
-1️⃣ the agent exists on-chain
-2️⃣ the responses are cryptographically signed
-3️⃣ the endpoint is publicly accessible
+This means anyone can independently verify the agent.
 
 ---
 
-## Agent Info
+# Agent Information
 
-**Agent asset (Registry ID)**
+Agent ID
 
 ```
 FSQcBRee4uviHS61VRViavoqVE9zZ14DrSNQPdiRt4ae
 ```
 
-**Owner wallet**
+Owner wallet
 
 ```
 3mcdWL1sffpuHnmLiXfoADdTsNPGgKEBXY2KeHXySoqT
@@ -36,19 +32,36 @@ FSQcBRee4uviHS61VRViavoqVE9zZ14DrSNQPdiRt4ae
 
 ---
 
-## MCP Endpoint
-
-Example:
+# Repository Structure
 
 ```
-https://YOUR-NGROK.ngrok-free.dev/mcp
+server.js            MCP server
+metadata.json        Agent metadata
+scripts/             Solana registry scripts
+README.md            Documentation
+```
+
+Scripts:
+
+```
+scripts/register-agent.ts
+scripts/verify.ts
+scripts/set-wallet.ts
+scripts/update-uri.ts
 ```
 
 ---
 
-# How to Run
+# Install
 
-## 1 Install dependencies
+Clone repository
+
+```
+git clone https://github.com/aurexcashagent/aurexcash-solana-agent
+cd aurexcash-solana-agent
+```
+
+Install dependencies
 
 ```
 npm install
@@ -56,13 +69,15 @@ npm install
 
 ---
 
-## 2 Run the agent server
+# Run Agent
+
+Start server
 
 ```
 node server.js
 ```
 
-Server runs at:
+Server runs at
 
 ```
 http://localhost:8787
@@ -70,7 +85,7 @@ http://localhost:8787
 
 ---
 
-## 3 Test locally
+# Test Agent Locally
 
 Health check
 
@@ -78,7 +93,15 @@ Health check
 curl http://127.0.0.1:8787/health
 ```
 
-Chat with the agent
+Expected response
+
+```
+{"ok":true}
+```
+
+---
+
+Send prompt to agent
 
 ```
 curl -X POST http://127.0.0.1:8787/mcp \
@@ -86,7 +109,7 @@ curl -X POST http://127.0.0.1:8787/mcp \
 -d '{"prompt":"Hello AurexCash"}'
 ```
 
-Example response:
+Example response
 
 ```
 {
@@ -102,8 +125,56 @@ Example response:
 
 # Make Endpoint Public
 
-Start ngrok:
+Run ngrok
 
 ```
-ngrok http
+ngrok http 8787
 ```
+
+Example public endpoint
+
+```
+https://xxxxx.ngrok-free.dev/mcp
+```
+
+Test public agent
+
+```
+curl -X POST https://xxxxx.ngrok-free.dev/mcp \
+-H "Content-Type: application/json" \
+-d '{"prompt":"Who are you?"}'
+```
+
+---
+
+# Verify Agent On Chain
+
+Run verification script
+
+```
+npx tsx scripts/verify.ts FSQcBRee4uviHS61VRViavoqVE9zZ14DrSNQPdiRt4ae
+```
+
+Expected output
+
+```
+Name: Agent
+Owner: 3mcdWL...
+URI: ipfs://...
+```
+
+---
+
+# Proof
+
+Agent can be verified by:
+
+1️⃣ Solana Agent Registry record
+2️⃣ Public MCP endpoint
+3️⃣ Signed responses from owner wallet
+
+---
+
+# License
+
+MIT
