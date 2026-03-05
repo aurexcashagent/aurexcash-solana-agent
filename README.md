@@ -1,4 +1,8 @@
 # AurexCash Solana AI Agent
+![License](https://img.shields.io/badge/license-MIT-green)
+![Solana](https://img.shields.io/badge/blockchain-Solana-purple)
+![Open Source](https://img.shields.io/badge/status-open--source-blue)
+![AI Agent](https://img.shields.io/badge/type-AI%20Agent-orange)
 
 Open-source **AI agent running on Solana Agent Registry** with an MCP endpoint and cryptographically signed responses.
 
