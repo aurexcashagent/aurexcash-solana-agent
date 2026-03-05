@@ -4,9 +4,6 @@ import { Keypair } from "@solana/web3.js";
 import nacl from "tweetnacl";
 import crypto from "crypto";
 
-// ---------- config ----------
-const PORT = Number(process.env.PORT || 8787);
-
 function getKeypairFromEnv() {
   const pk = process.env.SOLANA_PRIVATE_KEY;
   if (!pk) throw new Error("SOLANA_PRIVATE_KEY is not set");
@@ -34,7 +31,7 @@ async function generateText(prompt) {
     input: prompt,
   });
 
-  // responses API отдаёт текст так:
+  // responses API:
   return resp.output_text || "(no output_text)";
 }
 
