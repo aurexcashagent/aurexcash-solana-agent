@@ -1,20 +1,16 @@
 /**
  * AurexCash Solana Agent — Enhanced Server
  *
- * Original: MCP endpoint with signed responses
- * Added:    /purchase, /approve/:id, /reject/:id, /cards, /balance
- *
- * Drop-in replacement for the existing server.js
+ * Multi-user: users pass their own Aurex API key + User ID via headers
+ * Headers: X-Aurex-Key, X-Aurex-User-Id
+ * Fallback: uses .env values if headers not provided
  */
-
 import express from "express";
 import OpenAI from "openai";
 import { Keypair } from "@solana/web3.js";
 import nacl from "tweetnacl";
 import crypto from "crypto";
 import { PurchaseAgent } from "./src/agent/purchase-agent.js";
-
-// ─── Existing helpers (unchanged) ───
 
 function getKeypairFromEnv() {
   const pk = process.env.SOLANA_PRIVATE_KEY;
@@ -25,121 +21,110 @@ function getKeypairFromEnv() {
 function makeSigner(keypair) {
   return {
     publicKey: keypair.publicKey,
-    sign: async (messageBytes) =>
-      nacl.sign.detached(messageBytes, keypair.secretKey),
+    sign: async (messageBytes) => nacl.sign.detached(messageBytes, keypair.secretKey),
   };
 }
 
 async function generateText(prompt) {
   const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) {
-    return `AurexCash: получен prompt "${prompt}". (OPENAI_API_KEY не задан)`;
-  }
+  if (!apiKey) return `AurexCash: received "${prompt}". (OPENAI_API_KEY not set)`;
   const client = new OpenAI({ apiKey });
-  const resp = await client.responses.create({
-    model: "gpt-4.1-mini",
-    input: prompt,
-  });
+  const resp = await client.responses.create({ model: "gpt-4.1-mini", input: prompt });
   return resp.output_text || "(no output_text)";
 }
 
-// ─── Purchase Agent Setup ───
+// Get Aurex credentials: from headers first, then .env fallback
+function getAurexCreds(req) {
+  const apiKey = req.headers["x-aurex-key"] || process.env.AUREX_API_KEY;
+  const userId = req.headers["x-aurex-user-id"] || process.env.AUREX_USER_ID;
+  if (!apiKey || !userId) return null;
+  return { apiKey, userId };
+}
 
-const purchaseAgent = process.env.AUREX_API_KEY
-  ? new PurchaseAgent({
-      userId: process.env.AUREX_USER_ID,
-      aurexApiKey: process.env.AUREX_API_KEY,
-      approvalTransport: process.env.APPROVAL_TRANSPORT || "console",
-      enableBrowser: process.env.ENABLE_BROWSER === "true",
-    })
-  : null;
+// Create agent per request (supports multi-user)
+function createAgent(creds) {
+  return new PurchaseAgent({
+    userId: creds.userId,
+    aurexApiKey: creds.apiKey,
+    approvalTransport: process.env.APPROVAL_TRANSPORT || "console",
+  });
+}
 
-// ─── Server ───
+// Approval store (shared across requests)
+const approvalAgents = new Map();
 
 const app = express();
 app.use(express.json({ limit: "2mb" }));
 
-// ── Existing endpoints (unchanged) ──
-
 app.get("/health", (_req, res) => {
-  res.json({
-    ok: true,
-    features: {
-      mcp: true,
-      purchase: !!purchaseAgent,
-      browser: process.env.ENABLE_BROWSER === "true",
-    },
-  });
+  res.json({ ok: true, version: "2.0.0", features: { mcp: true, purchase: true, multiUser: true } });
 });
 
 app.post("/mcp", async (req, res) => {
   try {
     const { prompt } = req.body || {};
     if (typeof prompt !== "string" || !prompt.trim()) {
-      return res
-        .status(400)
-        .json({ ok: false, error: "prompt must be a non-empty string" });
+      return res.status(400).json({ ok: false, error: "prompt required" });
     }
-
     const keypair = getKeypairFromEnv();
     const signer = makeSigner(keypair);
 
-    // Check if this is a purchase request
-    const isPurchase =
-      purchaseAgent && /\b(buy|купи|закажи|order|purchase)\b/i.test(prompt);
-
+    const creds = getAurexCreds(req);
+    const isPurchase = creds && /\b(buy|order|purchase)\b/i.test(prompt);
     let output;
     if (isPurchase) {
-      const result = await purchaseAgent.handleMessage(prompt);
+      const agent = createAgent(creds);
+      const result = await agent.handleMessage(prompt);
+
+      // Store agent for approval flow
+      if (result.type === "purchase_result" && result.result?.pendingApproval) {
+        approvalAgents.set(result.result.requestId, agent);
+      }
       output = JSON.stringify(result, null, 2);
     } else {
       output = await generateText(prompt);
     }
 
-    // Sign response
     const nonce = crypto.randomBytes(16).toString("hex");
     const message = JSON.stringify({ prompt, output, nonce });
     const messageBytes = new TextEncoder().encode(message);
     const sigBytes = await signer.sign(messageBytes);
     const signature = Buffer.from(sigBytes).toString("base64");
 
-    res.json({
-      ok: true,
-      output,
-      signature,
-      signer: signer.publicKey.toBase58(),
-      nonce,
-    });
+    res.json({ ok: true, output, signature, signer: signer.publicKey.toBase58(), nonce });
   } catch (e) {
     res.status(500).json({ ok: false, error: e?.message || String(e) });
   }
 });
 
-// ── New: Purchase endpoints ──
-
+// Purchase endpoint — multi-user via headers
 app.post("/purchase", async (req, res) => {
-  if (!purchaseAgent) {
-    return res.status(503).json({
+  const creds = getAurexCreds(req);
+  if (!creds) {
+    return res.status(401).json({
       ok: false,
-      error: "Purchase agent not configured. Set AUREX_API_KEY and AUREX_USER_ID.",
+      error: "Aurex credentials required. Pass X-Aurex-Key and X-Aurex-User-Id headers, or set AUREX_API_KEY and AUREX_USER_ID in .env",
     });
   }
 
   const { product, merchant, maxBudget, url } = req.body || {};
   if (!product || !maxBudget) {
-    return res.status(400).json({
-      ok: false,
-      error: "Required: product, maxBudget. Optional: merchant, url",
-    });
+    return res.status(400).json({ ok: false, error: "Required: product, maxBudget. Optional: merchant, url" });
   }
 
   try {
-    const result = await purchaseAgent.executePurchase({
+    const agent = createAgent(creds);
+    const result = await agent.executePurchase({
       product,
       merchant: merchant || "unknown",
       maxBudget: parseFloat(maxBudget),
       url,
     });
+
+    // Store agent for approval
+    if (result.requestId) {
+      approvalAgents.set(result.requestId, agent);
+    }
     res.json({ ok: result.success, ...result });
   } catch (e) {
     res.status(500).json({ ok: false, error: e.message });
@@ -147,65 +132,62 @@ app.post("/purchase", async (req, res) => {
 });
 
 app.post("/approve/:requestId", (req, res) => {
-  if (!purchaseAgent) return res.status(503).json({ ok: false });
-
-  const handled = purchaseAgent.approval.handleResponse(
-    req.params.requestId,
-    true
-  );
+  const agent = approvalAgents.get(req.params.requestId);
+  if (!agent) {
+    // Try fallback with env creds
+    const creds = getAurexCreds(req);
+    if (creds) {
+      const a = createAgent(creds);
+      const handled = a.approval.handleResponse(req.params.requestId, true);
+      return res.json({ ok: handled, action: "approved" });
+    }
+    return res.status(404).json({ ok: false, error: "Request not found" });
+  }
+  const handled = agent.approval.handleResponse(req.params.requestId, true);
+  if (handled) approvalAgents.delete(req.params.requestId);
   res.json({ ok: handled, action: "approved" });
 });
 
 app.post("/reject/:requestId", (req, res) => {
-  if (!purchaseAgent) return res.status(503).json({ ok: false });
-
-  const handled = purchaseAgent.approval.handleResponse(
-    req.params.requestId,
-    false
-  );
-  res.json({ ok: handled, action: "rejected" });
+  const agent = approvalAgents.get(req.params.requestId);
+  if (agent) {
+    agent.approval.handleResponse(req.params.requestId, false);
+    approvalAgents.delete(req.params.requestId);
+  }
+  res.json({ ok: true, action: "rejected" });
 });
 
-// ── New: Card management endpoints ──
-
+// Card management — multi-user via headers
 app.get("/cards", async (req, res) => {
-  if (!purchaseAgent) return res.status(503).json({ ok: false });
+  const creds = getAurexCreds(req);
+  if (!creds) return res.status(401).json({ ok: false, error: "X-Aurex-Key and X-Aurex-User-Id required" });
   try {
-    const result = await purchaseAgent.aurex.listCards(purchaseAgent.userId);
-    res.json(result);
-  } catch (e) {
-    res.status(500).json({ ok: false, error: e.message });
-  }
+    const agent = createAgent(creds);
+    res.json(await agent.aurex.listCards(creds.userId));
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
 
 app.get("/balance", async (req, res) => {
-  if (!purchaseAgent) return res.status(503).json({ ok: false });
+  const creds = getAurexCreds(req);
+  if (!creds) return res.status(401).json({ ok: false, error: "X-Aurex-Key and X-Aurex-User-Id required" });
   try {
-    const balance = await purchaseAgent.aurex.getUserBalance(
-      purchaseAgent.userId
-    );
+    const agent = createAgent(creds);
+    const balance = await agent.aurex.getUserBalance(creds.userId);
     res.json({ ok: true, balance });
-  } catch (e) {
-    res.status(500).json({ ok: false, error: e.message });
-  }
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
-
-// ── Start ──
 
 const PORT = process.env.PORT || 8787;
 app.listen(PORT, () => {
-  console.log(`\n  ◎ AurexCash Agent: http://localhost:${PORT}`);
-  console.log(`  ├─ Health:   GET  /health`);
-  console.log(`  ├─ MCP:      POST /mcp`);
-  console.log(`  ├─ Purchase: POST /purchase`);
-  console.log(`  ├─ Approve:  POST /approve/:id`);
-  console.log(`  ├─ Reject:   POST /reject/:id`);
-  console.log(`  ├─ Cards:    GET  /cards`);
-  console.log(`  └─ Balance:  GET  /balance\n`);
-
-  if (!purchaseAgent) {
-    console.log(
-      "  ⚠ Purchase agent disabled. Set AUREX_API_KEY and AUREX_USER_ID to enable.\n"
-    );
-  }
+  console.log(`\n  AurexCash Agent: http://localhost:${PORT}`);
+  console.log("  \n  Multi-user mode: pass X-Aurex-Key + X-Aurex-User-Id headers");
+  console.log("  Or set AUREX_API_KEY + AUREX_USER_ID in .env for single-user\n");
+  console.log("  Endpoints:");
+  console.log("    GET  /health");
+  console.log("    POST /mcp        (auto-detects purchase intent)");
+  console.log("    POST /purchase   (structured purchase)");
+  console.log("    POST /approve/:id");
+  console.log("    POST /reject/:id");
+  console.log("    GET  /cards");
+  console.log("    GET  /balance\n");
 });
