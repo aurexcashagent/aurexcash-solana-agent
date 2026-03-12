@@ -1,213 +1,291 @@
 # AurexCash Solana AI Agent
 
-[![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
-[![Solana](https://img.shields.io/badge/blockchain-Solana-purple)](https://solana.com)
-[![Open Source](https://img.shields.io/badge/status-open--source-blue)]()
-[![AI Agent](https://img.shields.io/badge/type-AI%20Agent-orange)]()
+Open-source AI agent on Solana with **virtual card payments** powered by [Aurex](https://aurex.cash).
 
-Open-source AI agent running on **Solana Agent Registry** with an MCP endpoint and cryptographically signed responses.
+The agent can **buy things for you**: you send a message → agent finds the product → you approve → agent creates a card, fills checkout, handles 3DS → done.
 
----
-
-# Overview
-
-AurexCash is a **Web3 AI agent** that:
-
-• runs an MCP endpoint
-• signs every response using a Solana wallet
-• is registered on-chain in the Solana Agent Registry
-
-This means anyone can independently verify the agent.
-
----
-
-# Agent Information
-
-Agent ID
+## Architecture
 
 ```
-FSQcBRee4uviHS61VRViavoqVE9zZ14DrSNQPdiRt4ae
+User (Telegram / Web)
+  ↓ "Buy AirPods on Amazon, up to $300"
+AI Agent (NLP + intent parsing)
+  ↓ parses product, merchant, budget
+Approval Engine
+  ↓ "AirPods $279 on Amazon. Approve?" → [✅] [❌]
+Aurex API (aurex.cash/api/dashboard)
+  ├─ POST /cards          → create virtual card ($300)
+  ├─ GET  /cards/:id      → get PAN, CVV, expiry
+  └─ GET  /otp            → get 3DS code
+Browser Automation (Playwright)
+  ↓ fills checkout form with card details
+Merchant (Amazon, etc.)
+  ↓ processes payment
+Agent → User: "Order #123-456 confirmed ✅"
 ```
 
-Owner wallet
+## Features
+
+- **MCP endpoint** with Solana wallet-signed responses
+- **Aurex virtual cards** — create, top-up, get details via API
+- **Human-in-the-loop** — every purchase requires user approval
+- **Browser checkout** — automated form filling with Playwright
+- **3DS handling** — automatic OTP retrieval from Aurex API
+- **On-chain registration** — agent registered in Solana Agent Registry
+
+## Agent Info
+
+| Field | Value |
+|-------|-------|
+| Agent ID | `FSQcBRee4uviHS61VRViavoqVE9zZ14DrSNQPdiRt4ae` |
+| Owner | `3mcdWL1sffpuHnmLiXfoADdTsNPGgKEBXY2KeHXySoqT` |
+
+## Repository Structure
 
 ```
-3mcdWL1sffpuHnmLiXfoADdTsNPGgKEBXY2KeHXySoqT
+aurexcash-solana-agent/
+├── server.js                     # Main server (MCP + purchase endpoints)
+├── src/
+│   ├── aurex/
+│   │   ├── client.js             # Aurex API client
+│   │   ├── card-manager.js       # Card operations + fee calculations
+│   │   └── index.js
+│   ├── agent/
+│   │   └── purchase-agent.js     # Main orchestrator
+│   ├── approval/
+│   │   └── engine.js             # Human approval flow
+│   ├── browser/
+│   │   └── checkout.js           # Playwright checkout automation
+│   └── tools/
+│       └── aurex-tools.js        # MCP tool definitions
+├── scripts/                      # On-chain registration scripts
+├── tests/
+│   └── test-aurex-client.js
+├── .env.example
+├── package.json
+└── README.md
 ```
 
----
-
-# Repository Structure
-
-```
-aurexcash-solana-agent
-
-server.js            MCP server
-metadata.json        Agent metadata
-
-scripts/
-  register-agent.ts
-  verify.ts
-  set-wallet.ts
-  update-uri.ts
-  get-wallet.ts
-  list-skills.ts
-
-README.md
-LICENSE
-.gitignore
-package.json
-```
-
----
-
-# Quick Start
-
-Clone repository
+## Quick Start
 
 ```bash
 git clone https://github.com/aurexcashagent/aurexcash-solana-agent
 cd aurexcash-solana-agent
 npm install
-```
-
-Run the agent
-
-```bash
+cp .env.example .env
 node server.js
 ```
 
-Server runs at
+| Variable | Description |
+|----------|-------------|
+| `SOLANA_PRIVATE_KEY` | Solana wallet secret key (JSON array) |
+| `AUREX_API_KEY` | API key from Aurex dashboard |
+| `AUREX_USER_ID` | Your Aurex user ID |
 
-```
-http://localhost:8787
-```
+## API Endpoints
 
----
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/health` | Health check |
+| POST | `/mcp` | MCP endpoint (auto-detects purchase intent) |
+| POST | `/purchase` | Direct purchase API |
+| POST | `/approve/:id` | Approve pending purchase |
+| POST | `/reject/:id` | Reject pending purchase |
+| GET | `/cards` | List virtual cards |
+| GET | `/balance` | Wallet balance |
 
-# Test Agent Locally
-
-Health check
-
-```bash
-curl http://127.0.0.1:8787/health
-```
-
-Expected response
-
-```
-{"ok":true}
-```
-
-Send prompt to agent
+## Usage
 
 ```bash
-curl -X POST http://127.0.0.1:8787/mcp \
--H "Content-Type: application/json" \
--d '{"prompt":"Hello AurexCash"}'
+# Natural language via MCP
+curl -X POST http://localhost:8787/mcp \
+  -H "Content-Type: application/json" \
+  -d '{"prompt":"Buy AirPods Pro on Amazon up to $300"}'
+
+# Direct purchase API
+curl -X POST http://localhost:8787/purchase \
+  -H "Content-Type: application/json" \
+  -d '{"product":"AirPods Pro","merchant":"amazon.com","maxBudget":300}'
+
+# Approve
+curl -X POST http://localhost:8787/approve/REQUEST_ID
 ```
 
-Example response
+## Aurex API Integration
+
+| Endpoint | Usage |
+|----------|-------|
+| `POST /users/{id}/cards` | Create card per purchase |
+| `GET /users/{id}/cards/{cardId}` | Get PAN/CVV/expiry |
+| `POST /cards/{cardId}/topup` | Top up card |
+| `GET /users/{id}/otp?cardId=` | Get 3DS OTP |
+| `GET /cards/{cardId}/transactions` | Verify purchase |
+
+**Fees**: $19 issue + 5% service | Top-up: 3% | Min $25 / Max $100k
+
+## Security
+
+- Every spend requires explicit user approval
+- New card per transaction — isolates risk
+- Card details in memory only, never persisted
+- Auto-decline after 5 min timeout
+- MCP responses signed with Solana wallet
+
+## Roadmap
+
+- [x] MCP endpoint with signed responses
+- [x] Aurex card API integration
+- [x] Human approval flow
+- [x] Browser checkout automation
+- [ ] Telegram bot interface
+- [ ] Multi-merchant checkout profiles
+- [ ] On-chain skill registry
+
+## License
+
+MIT# AurexCash Solana AI Agent
+
+Open-source AI agent on Solana with **virtual card payments** powered by [Aurex](https://aurex.cash).
+
+The agent can **buy things for you**: you send a message → agent finds the product → you approve → agent creates a card, fills checkout, handles 3DS → done.
+
+## Architecture
 
 ```
-{
- "ok": true,
- "output": "Hello! How can I assist you today?",
- "signature": "...",
- "signer": "...",
- "nonce": "..."
-}
+User (Telegram / Web)
+  ↓ "Buy AirPods on Amazon, up to $300"
+AI Agent (NLP + intent parsing)
+  ↓ parses product, merchant, budget
+Approval Engine
+  ↓ "AirPods $279 on Amazon. Approve?" → [✅] [❌]
+Aurex API (aurex.cash/api/dashboard)
+  ├─ POST /cards          → create virtual card ($300)
+  ├─ GET  /cards/:id      → get PAN, CVV, expiry
+  └─ GET  /otp            → get 3DS code
+Browser Automation (Playwright)
+  ↓ fills checkout form with card details
+Merchant (Amazon, etc.)
+  ↓ processes payment
+Agent → User: "Order #123-456 confirmed ✅"
 ```
 
----
+## Features
 
-# Make Endpoint Public
+- **MCP endpoint** with Solana wallet-signed responses
+- **Aurex virtual cards** — create, top-up, get details via API
+- **Human-in-the-loop** — every purchase requires user approval
+- **Browser checkout** — automated form filling with Playwright
+- **3DS handling** — automatic OTP retrieval from Aurex API
+- **On-chain registration** — agent registered in Solana Agent Registry
 
-Run ngrok
+## Agent Info
+
+| Field | Value |
+|-------|-------|
+| Agent ID | `FSQcBRee4uviHS61VRViavoqVE9zZ14DrSNQPdiRt4ae` |
+| Owner | `3mcdWL1sffpuHnmLiXfoADdTsNPGgKEBXY2KeHXySoqT` |
+
+## Repository Structure
+
+```
+aurexcash-solana-agent/
+├── server.js                     # Main server (MCP + purchase endpoints)
+├── src/
+│   ├── aurex/
+│   │   ├── client.js             # Aurex API client
+│   │   ├── card-manager.js       # Card operations + fee calculations
+│   │   └── index.js
+│   ├── agent/
+│   │   └── purchase-agent.js     # Main orchestrator
+│   ├── approval/
+│   │   └── engine.js             # Human approval flow
+│   ├── browser/
+│   │   └── checkout.js           # Playwright checkout automation
+│   └── tools/
+│       └── aurex-tools.js        # MCP tool definitions
+├── scripts/                      # On-chain registration scripts
+├── tests/
+│   └── test-aurex-client.js
+├── .env.example
+├── package.json
+└── README.md
+```
+
+## Quick Start
 
 ```bash
-ngrok http 8787
+git clone https://github.com/aurexcashagent/aurexcash-solana-agent
+cd aurexcash-solana-agent
+npm install
+cp .env.example .env
+node server.js
 ```
 
-Example public endpoint
+| Variable | Description |
+|----------|-------------|
+| `SOLANA_PRIVATE_KEY` | Solana wallet secret key (JSON array) |
+| `AUREX_API_KEY` | API key from Aurex dashboard |
+| `AUREX_USER_ID` | Your Aurex user ID |
 
-```
-https://xxxxx.ngrok-free.dev/mcp
-```
+## API Endpoints
 
-Test public agent
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/health` | Health check |
+| POST | `/mcp` | MCP endpoint (auto-detects purchase intent) |
+| POST | `/purchase` | Direct purchase API |
+| POST | `/approve/:id` | Approve pending purchase |
+| POST | `/reject/:id` | Reject pending purchase |
+| GET | `/cards` | List virtual cards |
+| GET | `/balance` | Wallet balance |
+
+## Usage
 
 ```bash
-curl -X POST https://xxxxx.ngrok-free.dev/mcp \
--H "Content-Type: application/json" \
--d '{"prompt":"Who are you?"}'
+# Natural language via MCP
+curl -X POST http://localhost:8787/mcp \
+  -H "Content-Type: application/json" \
+  -d '{"prompt":"Buy AirPods Pro on Amazon up to $300"}'
+
+# Direct purchase API
+curl -X POST http://localhost:8787/purchase \
+  -H "Content-Type: application/json" \
+  -d '{"product":"AirPods Pro","merchant":"amazon.com","maxBudget":300}'
+
+# Approve
+curl -X POST http://localhost:8787/approve/REQUEST_ID
 ```
 
----
+## Aurex API Integration
 
-# Verify Agent On Chain
+| Endpoint | Usage |
+|----------|-------|
+| `POST /users/{id}/cards` | Create card per purchase |
+| `GET /users/{id}/cards/{cardId}` | Get PAN/CVV/expiry |
+| `POST /cards/{cardId}/topup` | Top up card |
+| `GET /users/{id}/otp?cardId=` | Get 3DS OTP |
+| `GET /cards/{cardId}/transactions` | Verify purchase |
 
-Run verification script
+**Fees**: $19 issue + 5% service | Top-up: 3% | Min $25 / Max $100k
 
-```bash
-npx tsx scripts/verify.ts FSQcBRee4uviHS61VRViavoqVE9zZ14DrSNQPdiRt4ae
-```
+## Security
 
-Expected output
+- Every spend requires explicit user approval
+- New card per transaction — isolates risk
+- Card details in memory only, never persisted
+- Auto-decline after 5 min timeout
+- MCP responses signed with Solana wallet
 
-```
-Name: Agent
-Owner: 3mcdWL...
-URI: ipfs://...
-```
+## Roadmap
 
----
+- [x] MCP endpoint with signed responses
+- [x] Aurex card API integration
+- [x] Human approval flow
+- [x] Browser checkout automation
+- [ ] Telegram bot interface
+- [ ] Multi-merchant checkout profiles
+- [ ] On-chain skill registry
 
-# Architecture
-
-```
-User
- ↓
-MCP Endpoint (server.js)
- ↓
-AI Model
- ↓
-Response
- ↓
-Solana Wallet Signature
-```
-
-Every response returned by the agent includes a cryptographic signature from the agent wallet.
-
----
-
-# Proof
-
-Agent authenticity can be verified through:
-
-1️⃣ Solana Agent Registry record
-2️⃣ Public MCP endpoint
-3️⃣ Signed responses from the owner wallet
-
-Example signed response fields:
-
-```
-signature
-signer
-nonce
-```
-
----
-
-# Roadmap
-
-• MCP tools support
-• On-chain skill registry
-• Multi-agent communication
-• Autonomous Web3 actions
-
----
-
-# License
+## License
 
 MIT
