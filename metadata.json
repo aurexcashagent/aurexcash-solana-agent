@@ -1,10 +1,15 @@
 {
-  "name": "AurexCash",
-  "description": "AI agent for Aurex ecosystem built on Solana",
-  "services": [
-    {
-      "type": "mcp",
-      "value": "https://percolative-ruttiest-shakia.ngrok-free.dev/mcp"
-    }
-  ]
+    "name": "AurexCash",
+    "description": "AI agent for Aurex ecosystem built on Solana",
+    "version": "2.1.0",
+    "homepage": "https://aurex.cash",
+    "npm": "https://www.npmjs.com/package/@aurexcash/agent",
+    "repository": "https://github.com/aurexcashagent/aurexcash-solana-agent",
+    "services": [
+          {
+                  "type": "mcp",
+                  "transport": "stdio",
+                  "install": "npm install -g @aurexcash/agent"
+          }
+    ]
 }
