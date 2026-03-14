@@ -1,33 +1,39 @@
 {
-  "name": "aurexcash-solana-agent",
-  "version": "2.0.0",
-  "description": "Web3 AI agent on Solana with Aurex card payments",
+  "name": "@aurexcash/agent",
+  "version": "2.1.0",
+  "description": "AI agent that pays with virtual cards via Aurex. MCP Server for Claude, Cursor, and any MCP client.",
   "type": "module",
-  "main": "server.js",
-  "scripts": {
-    "start": "node server.js",
-    "dev": "node --watch server.js",
-    "test": "node tests/test-aurex-client.js",
-    "test:purchase": "node tests/test-purchase-flow.js"
+  "main": "index.js",
+  "bin": {
+    "aurex-agent": "bin/cli.js"
   },
-  "keywords": ["solana", "ai-agent", "aurex", "virtual-cards", "mcp"],
+  "scripts": {
+    "start": "node index.js",
+    "setup": "node bin/cli.js setup",
+    "setup-mcp": "node bin/cli.js setup-mcp"
+  },
+  "keywords": [
+    "aurex",
+    "mcp",
+    "ai-agent",
+    "virtual-cards",
+    "solana",
+    "payments",
+    "claude",
+    "cursor",
+    "agentic-commerce"
+  ],
   "author": "AurexCash",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/aurexcashagent/aurexcash-solana-agent"
+  },
+  "homepage": "https://aurex.cash",
   "dependencies": {
-    "@solana/web3.js": "^1.98.4",
-    "8004-solana": "^0.7.9",
-    "bs58": "^6.0.0",
-    "express": "^5.2.1",
-    "openai": "^6.25.0",
-    "tweetnacl": "^1.0.3"
+    "@modelcontextprotocol/sdk": "^1.12.1"
   },
-  "optionalDependencies": {
-    "playwright": "^1.50.0",
-    "node-telegram-bot-api": "^0.66.0"
-  },
-  "devDependencies": {
-    "@types/node": "^25.3.3",
-    "tsx": "^4.21.0",
-    "typescript": "^5.9.3"
+  "engines": {
+    "node": ">=18"
   }
 }
