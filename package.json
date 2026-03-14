@@ -1,39 +1,40 @@
 {
-  "name": "@aurexcash/agent",
-  "version": "2.1.0",
-  "description": "AI agent that pays with virtual cards via Aurex. MCP Server for Claude, Cursor, and any MCP client.",
-  "type": "module",
-  "main": "index.js",
-  "bin": {
-    "aurex-agent": "bin/cli.js"
-  },
-  "scripts": {
-    "start": "node index.js",
-    "setup": "node bin/cli.js setup",
-    "setup-mcp": "node bin/cli.js setup-mcp"
-  },
-  "keywords": [
-    "aurex",
-    "mcp",
-    "ai-agent",
-    "virtual-cards",
-    "solana",
-    "payments",
-    "claude",
-    "cursor",
-    "agentic-commerce"
-  ],
-  "author": "AurexCash",
-  "license": "MIT",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/aurexcashagent/aurexcash-solana-agent"
-  },
-  "homepage": "https://aurex.cash",
-  "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.12.1"
-  },
-  "engines": {
-    "node": ">=18"
-  }
+    "name": "@aurexcash/agent",
+    "version": "2.1.0",
+    "description": "AI agent that pays with virtual cards via Aurex. MCP Server for Claude, Cursor, and any MCP client.",
+    "type": "module",
+    "main": "index.js",
+    "bin": {
+          "aurex-agent": "bin/cli.js"
+    },
+    "scripts": {
+          "start": "node server-railway.js",
+          "mcp": "node index.js",
+          "setup": "node bin/cli.js setup",
+          "setup-mcp": "node bin/cli.js setup-mcp"
+    },
+    "keywords": [
+          "aurex",
+          "mcp",
+          "ai-agent",
+          "virtual-cards",
+          "solana",
+          "payments",
+          "claude",
+          "cursor",
+          "agentic-commerce"
+    ],
+    "author": "AurexCash",
+    "license": "MIT",
+    "repository": {
+          "type": "git",
+          "url": "https://github.com/aurexcashagent/aurexcash-solana-agent"
+    },
+    "homepage": "https://aurex.cash",
+    "dependencies": {
+          "@modelcontextprotocol/sdk": "^1.12.1"
+    },
+    "engines": {
+          "node": ">=18"
+    }
 }
